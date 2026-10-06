@@ -1,0 +1,25 @@
+{
+  "name": "voice-garden",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "zip": "npm run build && rm -f garden-dist.zip && (cd dist && zip -r ../garden-dist.zip .)"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.2",
+    "vite": "^6.0.1"
+  },
+  "dependencies": {
+    "idb": "^8.0.2",
+    "lil-gui": "^0.19.2",
+    "meyda": "^5.6.3",
+    "three": "^0.170.0",
+    "zustand": "^5.0.2"
+  },
+  "description": "Audio-reactive particle field in the browser (Three.js + Web Audio).",
+  "license": "MIT"
+}

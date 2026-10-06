@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Garden</title>
+  </head>
+  <body>
+    <div id="app-root">
+      <header class="top-bar">Voice Garden</header>
+      <canvas id="c"></canvas>
+      <div id="memory-hall" class="memory-hall" aria-label="Memory corridor sessions"></div>
+      <footer class="bottom-bar">
+        <button type="button" id="btn-mic" class="btn-mic">Mic on</button>
+        <span id="rec-indicator" class="rec-indicator" hidden>Recording</span>
+        <button type="button" id="btn-record" class="btn-record">Record session</button>
+        <button type="button" id="btn-stop" class="btn-stop" hidden>Stop</button>
+      </footer>
+      <div id="latency-overlay" class="latency-overlay" aria-live="polite"></div>
+      <div id="gui-mount" class="gui-mount" aria-label="Settings"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
