@@ -26,11 +26,11 @@ export type LiveUniforms = {
 };
 
 const defaultSettings: GardenSettings = {
-  dispersion: 1.5,
-  particleSize: 1.5,
+  dispersion: 0.7,
+  particleSize: 0.6,
   flowSpeed: 1.0,
   audioReactivity: 0.7,
-  bloomIntensity: 1.5,
+  bloomIntensity: 1.0,
   colorShiftSpeed: 1.0,
   particleCount: PARTICLE_BASELINE,
 };

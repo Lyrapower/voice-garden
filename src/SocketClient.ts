@@ -6,6 +6,11 @@ const HOST = location.hostname || 'localhost';
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${HOST}:${BACKEND_PORT}/live`;
 const TELEMETRY_URL = `${location.protocol === 'https:' ? 'https' : 'http'}://${HOST}:${BACKEND_PORT}/api/telemetry`;
 
+// The hosted demo (GitHub Pages, built with VITE_LIVE=0) has no backend, so it skips the :8787 probes and runs on
+// the built-in generator. Add ?live to the URL to probe anyway.
+const LIVE_ENABLED =
+  import.meta.env.VITE_LIVE !== '0' || new URLSearchParams(location.search).has('live');
+
 const POLL_MS = 100; // 10Hz HTTP fallback
 const WS_RETRY_MS = 5000;
 
@@ -28,6 +33,7 @@ export class SocketClient {
   connect(onSample: (s: AiStreamSample) => void): void {
     this.onSample = onSample;
     this.startMock(); // instant visual feedback while real sources come up
+    if (!LIVE_ENABLED) return;
     this.startPolling();
     this.tryWebSocket();
   }
