@@ -1,12 +1,18 @@
 import * as THREE from 'three';
 import type { LiveUniforms } from './store';
 
+/** Typed uniform lookup: fails loudly if a shader uniform is renamed instead of writing to nothing. */
+export function uniform(m: { uniforms: Record<string, THREE.IUniform> }, name: string): THREE.IUniform {
+  const u = m.uniforms[name];
+  if (!u) throw new Error(`missing uniform ${name}`);
+  return u;
+}
+
 const vertInstanced = /* glsl */ `
 precision highp float;
 attribute vec3 particleBase;
 attribute float particleSeed;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
+// modelViewMatrix, projectionMatrix (and uv) are declared by THREE.ShaderMaterial; redeclaring them fails to compile.
 uniform vec3 uCameraPos;
 uniform float uTime;
 uniform float u_density;
@@ -17,7 +23,6 @@ uniform float u_particleScale;
 uniform float u_dispersion;
 uniform float u_colorShift;
 
-attribute vec2 uv;
 varying float vAlpha;
 varying float vGlow;
 varying vec3 vColor;
@@ -100,8 +105,10 @@ void main() {
 
   gl_Position = projectionMatrix * mvPosition;
 
-  float depth = smoothstep(120.0, 8.0, -mvPosition.z);
-  vAlpha = mix(0.12, 0.95, depth) * (0.55 + 0.45 * u_coherence);
+  // fade by distance relative to the camera's orbit, so the falloff holds at any orbit radius
+  float camDist = length(uCameraPos);
+  float depth = smoothstep(camDist + 110.0, camDist - 60.0, -mvPosition.z);
+  vAlpha = 0.13 * mix(0.12, 0.95, depth) * (0.55 + 0.45 * u_coherence); // additive: keep the sum of 100k below white
   vGlow = 0.25 + u_audioRMS * 0.75 + (1.0 - u_coherence) * 0.15;
 
   float hue = fract(particleSeed * 0.173 + uTime * 0.02 + u_colorShift * 0.12);
@@ -137,8 +144,7 @@ const vertPoints = /* glsl */ `
 precision highp float;
 attribute vec3 particleBase;
 attribute float particleSeed;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
+// modelViewMatrix, projectionMatrix (and uv) are declared by THREE.ShaderMaterial; redeclaring them fails to compile.
 uniform float uTime;
 uniform float u_density;
 uniform float u_coherence;
@@ -328,15 +334,15 @@ export function applyLiveUniforms(
   live: LiveUniforms,
   extras: { flowSpeed: number; particleSize: number; dispersion: number; pointSize: number },
 ): void {
-  material.uniforms.uTime.value = live.u_time;
-  material.uniforms.u_density.value = live.u_density;
-  material.uniforms.u_colorShift.value = live.u_colorShift;
-  material.uniforms.u_coherence.value = live.u_coherence;
-  material.uniforms.u_audioRMS.value = live.u_audioRMS;
-  material.uniforms.u_flowSpeed.value = extras.flowSpeed;
-  material.uniforms.u_particleScale.value = extras.particleSize;
-  material.uniforms.u_dispersion.value = extras.dispersion;
-  if (material.uniforms.u_size) material.uniforms.u_size.value = extras.pointSize;
+  uniform(material, 'uTime').value = live.u_time;
+  uniform(material, 'u_density').value = live.u_density;
+  uniform(material, 'u_colorShift').value = live.u_colorShift;
+  uniform(material, 'u_coherence').value = live.u_coherence;
+  uniform(material, 'u_audioRMS').value = live.u_audioRMS;
+  uniform(material, 'u_flowSpeed').value = extras.flowSpeed;
+  uniform(material, 'u_particleScale').value = extras.particleSize;
+  uniform(material, 'u_dispersion').value = extras.dispersion;
+  if (material.uniforms.u_size) uniform(material, 'u_size').value = extras.pointSize;
 }
 
 export function applyInstancedLiveUniforms(
@@ -345,15 +351,15 @@ export function applyInstancedLiveUniforms(
   extras: { flowSpeed: number; particleSize: number; dispersion: number },
   cameraWorld: THREE.Vector3,
 ): void {
-  if (material.uniforms.uCameraPos) material.uniforms.uCameraPos.value.copy(cameraWorld);
-  material.uniforms.uTime.value = live.u_time;
-  material.uniforms.u_density.value = live.u_density;
-  material.uniforms.u_colorShift.value = live.u_colorShift;
-  material.uniforms.u_coherence.value = live.u_coherence;
-  material.uniforms.u_audioRMS.value = live.u_audioRMS;
-  material.uniforms.u_flowSpeed.value = extras.flowSpeed;
-  material.uniforms.u_particleScale.value = extras.particleSize;
-  material.uniforms.u_dispersion.value = extras.dispersion;
+  if (material.uniforms.uCameraPos) uniform(material, 'uCameraPos').value.copy(cameraWorld);
+  uniform(material, 'uTime').value = live.u_time;
+  uniform(material, 'u_density').value = live.u_density;
+  uniform(material, 'u_colorShift').value = live.u_colorShift;
+  uniform(material, 'u_coherence').value = live.u_coherence;
+  uniform(material, 'u_audioRMS').value = live.u_audioRMS;
+  uniform(material, 'u_flowSpeed').value = extras.flowSpeed;
+  uniform(material, 'u_particleScale').value = extras.particleSize;
+  uniform(material, 'u_dispersion').value = extras.dispersion;
 }
 
 /** InstancedMesh variant kept for API parity: same curl field, billboard quads (optional swap). */

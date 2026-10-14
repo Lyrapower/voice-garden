@@ -10,54 +10,24 @@ import { AudioCapture } from './AudioCapture';
 import { Controller } from './Controller';
 import { createLatencyOverlay } from './Latency';
 import { MemoryHall, type ParticleKeyframe } from './MemoryHall';
+import { interpolateKeyframes } from './keyframes';
 import {
   applyInstancedLiveUniforms,
   createParticleInstancedField,
+  uniform,
 } from './ParticleField';
 import { SocketClient } from './SocketClient';
-import { PARTICLE_BASELINE, useGardenStore } from './store';
+import { useGardenStore } from './store';
 
 const BG = 0x0a0a0f;
-
-function interpolateKeyframes(
-  keyframes: ParticleKeyframe[],
-  t: number,
-): ParticleKeyframe | null {
-  if (!keyframes.length) return null;
-  if (t <= keyframes[0].t) return keyframes[0];
-  const last = keyframes[keyframes.length - 1];
-  if (!last || t >= last.t) return last;
-  let lo = 0;
-  let hi = keyframes.length - 1;
-  while (lo < hi - 1) {
-    const mid = (lo + hi) >> 1;
-    const km = keyframes[mid];
-    if (!km) break;
-    if (km.t <= t) lo = mid;
-    else hi = mid;
-  }
-  const a = keyframes[lo];
-  const b = keyframes[hi];
-  if (!a || !b) return null;
-  const w = (t - a.t) / Math.max(1e-6, b.t - a.t);
-  const lerp = (x: number, y: number) => x + (y - x) * w;
-  return {
-    t,
-    uniforms: {
-      u_density: lerp(a.uniforms.u_density, b.uniforms.u_density),
-      u_colorShift: lerp(a.uniforms.u_colorShift, b.uniforms.u_colorShift),
-      u_coherence: lerp(a.uniforms.u_coherence, b.uniforms.u_coherence),
-      u_audioRMS: lerp(a.uniforms.u_audioRMS, b.uniforms.u_audioRMS),
-    },
-    camera: {
-      x: lerp(a.camera.x, b.camera.x),
-      y: lerp(a.camera.y, b.camera.y),
-      z: lerp(a.camera.z, b.camera.z),
-      tx: lerp(a.camera.tx, b.camera.tx),
-      ty: lerp(a.camera.ty, b.camera.ty),
-      tz: lerp(a.camera.tz, b.camera.tz),
-    },
-  };
+// The camera orbits outside the cloud (radius up to ~60 x dispersion) so the field reads as one glowing body with dark
+// space around it; from inside it, 100k additive quads sum to a white screen.
+const CAMERA_ORBIT = 150;
+const FIELD_RADIUS = 55; // what must stay in frame horizontally on a portrait screen
+/** Orbit radius for the current aspect: 150 on landscape, further back on a phone held upright. */
+function orbitFor(aspect: number): number {
+  const halfV = THREE.MathUtils.degToRad(52 / 2);
+  return Math.max(CAMERA_ORBIT, FIELD_RADIUS / (Math.tan(halfV) * aspect));
 }
 
 const chromaShader = {
@@ -119,7 +89,7 @@ async function main(): Promise<void> {
   scene.background = new THREE.Color(BG);
 
   const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.5, 400);
-  camera.position.set(0, 0, 78);
+  camera.position.set(0, 0, orbitFor(camera.aspect));
 
   const count = useGardenStore.getState().settings.particleCount;
   const field = createParticleInstancedField(count);
@@ -132,9 +102,9 @@ async function main(): Promise<void> {
 
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    1.5,
+    1.0,
     0.42,
-    0.08,
+    0.25, // threshold: only the dense core blooms, not every particle
   );
   composer.addPass(bloomPass);
 
@@ -159,10 +129,10 @@ async function main(): Promise<void> {
   const sampleKeyframe = (): ParticleKeyframe => ({
     t: (performance.now() - recordT0) / 1000,
     uniforms: {
-      u_density: field.material.uniforms.u_density.value as number,
-      u_colorShift: field.material.uniforms.u_colorShift.value as number,
-      u_coherence: field.material.uniforms.u_coherence.value as number,
-      u_audioRMS: field.material.uniforms.u_audioRMS.value as number,
+      u_density: uniform(field.material, 'u_density').value as number,
+      u_colorShift: uniform(field.material, 'u_colorShift').value as number,
+      u_coherence: uniform(field.material, 'u_coherence').value as number,
+      u_audioRMS: uniform(field.material, 'u_audioRMS').value as number,
     },
     camera: {
       x: camera.position.x,
@@ -229,6 +199,7 @@ async function main(): Promise<void> {
 
   const guiParams = { ...useGardenStore.getState().settings };
   const gui = new GUI({ container: guiMount, title: 'Garden' });
+  gui.close(); // the field comes first; the panel opens from its title bar
   const folder = gui.addFolder('Field');
   folder
     .add(guiParams, 'dispersion', 0.5, 3.0, 0.01)
@@ -264,7 +235,15 @@ async function main(): Promise<void> {
       useGardenStore.getState().setMicEnabled(false);
       btnMic!.textContent = 'Mic on';
     } else {
-      await audio.requestMic();
+      try {
+        await audio.requestMic();
+      } catch {
+        // Permission denied or no input device: keep the field running on the built-in generator.
+        btnMic!.textContent = 'Mic blocked';
+        btnMic!.title = 'Allow microphone access for this site, then press again.';
+        return;
+      }
+      btnMic!.title = '';
       audio.startAnalyzing((f) => controller.setAudioFeatures(f));
       useGardenStore.getState().setMicEnabled(true);
       btnMic!.textContent = 'Mic off';
@@ -308,7 +287,7 @@ async function main(): Promise<void> {
 
     const s = useGardenStore.getState().settings;
     bloomPass.strength = s.bloomIntensity;
-    chromaPass.uniforms.amount.value = 0.001 + 0.004 * Math.min(1, s.audioReactivity);
+    uniform(chromaPass, 'amount').value = 0.001 + 0.004 * Math.min(1, s.audioReactivity);
 
     let live = controller.update(dt, s.colorShiftSpeed, s.audioReactivity);
 
@@ -329,7 +308,7 @@ async function main(): Promise<void> {
     } else {
       const breath = Math.sin(now * 0.00035) * 1.8;
       const orbit = now * 0.000055;
-      const r = 72 + breath;
+      const r = orbitFor(camera.aspect) + breath;
       tmpCam.set(
         Math.cos(orbit) * r + mouse.x * 18,
         Math.sin(orbit * 0.7) * 4 + mouse.y * 12,
