@@ -24,7 +24,7 @@ Most audio visualizers are bars and waveforms. Voice Garden treats sound more li
 - **Latency overlay.** Shows FPS and the audio-to-visual delay, so you can check the ≤ 80 ms target on your machine.
 - **Optional live stream.** It can also follow an external pitch stream over WebSocket or HTTP (see [Configuration](#configuration)).
 
-Want a video instead of a live view? [**voice-garden-render**](https://github.com/Lyrapower/voice-garden-render) renders any audio file into an MP4 of this field, frame by frame, from the command line.
+Want a video instead of a live view? [**voice-garden-render**](https://github.com/Lyrapower/voice-garden-render) renders any audio file into an MP4 of this field, frame by frame, from the command line, in five palettes. It is also an agent skill: `npx skills add Lyrapower/voice-garden-render`, then ask your agent for a music video.
 
 ## How it works
 
