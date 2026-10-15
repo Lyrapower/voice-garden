@@ -86,11 +86,47 @@ vec3 curlNoise(vec3 p) {
   return vec3(dy - dz, dz - dx, dx - dy);
 }
 
+// Deep-space palette: navy -> cyan -> magenta -> gold. x in [0, 1).
+vec3 palette(float x) {
+  vec3 navy = vec3(0.10, 0.16, 0.52);
+  vec3 cyan = vec3(0.12, 0.78, 0.95);
+  vec3 magenta = vec3(0.92, 0.12, 0.72);
+  vec3 gold = vec3(1.0, 0.6, 0.12);
+  x = fract(x) * 4.0;
+  if (x < 1.0) return mix(navy, cyan, x);
+  if (x < 2.0) return mix(cyan, magenta, x - 1.0);
+  if (x < 3.0) return mix(magenta, gold, x - 2.0);
+  return mix(gold, navy, x - 3.0);
+}
+
+float hash1(float n) { return fract(sin(n) * 43758.5453123); }
+
 void main() {
-  vec3 base = particleBase * u_dispersion;
+  // A turning spiral vortex. Three logarithmic arms turn as one rigid pattern (so they never wind up), and the
+  // particles stream inward along them and re-enter at the rim. A dim core and a faint disk between the arms.
+  // Curl noise adds turbulence on top.
+  vec3 b = particleBase;
+  float s1 = particleSeed;                              // uniform 0..1
+  float s2 = clamp((length(b) - 18.0) / 42.0, 0.0, 1.0); // uniform 0..1 (shell radius of the base point)
+  float s3 = hash1(s1 * 91.7 + s2 * 13.1);
+  float s4 = hash1(s1 * 17.3 + s2 * 5.9 + 3.7);
+  float core = step(s1, 0.08);
+  float dust = step(0.08, s1) * step(s1, 0.24);
+  float spin = uTime * u_flowSpeed * 0.3;
+  float u = fract(s2 - uTime * u_flowSpeed * 0.045);    // 1 = rim, 0 = inner end of the arm; decreases with time
+  float r = mix(7.0, 64.0, pow(u, 0.85));
+  float g = (s3 + hash1(s3 * 33.1) - 1.0);              // triangular -1..1: dense along the arm's centre line
+  float halfW = mix(0.42, 0.2, smoothstep(10.0, 55.0, r));
+  float th = floor(s4 * 3.0) * 2.0943951 + 2.3 * log(r / 7.0) + g * halfW + spin;
+  if (dust > 0.5) th = s4 * 6.2831853 + spin;
+  float ends = smoothstep(0.0, 0.08, u) * smoothstep(1.0, 0.92, u); // fade in at the rim, out at the inner end
+  if (core > 0.5) { r = 1.0 + 11.0 * s3 * s3; th = s4 * 6.2831853 + spin * 2.5; ends = 1.0; }
+  float thick = core > 0.5 ? 3.2 : 0.8 + 2.6 * (1.0 - smoothstep(7.0, 40.0, r));
+  vec3 base = vec3(cos(th) * r, normalize(b).y * thick, sin(th) * r) * u_dispersion * 1.35;
+
   float t = uTime * u_flowSpeed * 0.12;
-  vec3 p = base * u_density + vec3(t * 0.3, t * 0.21, t * 0.17);
-  vec3 flow = curlNoise(p) * (6.0 + u_audioRMS * 14.0) * mix(0.35, 1.0, u_coherence);
+  vec3 p = base * 0.05 * u_density + vec3(t * 0.3, t * 0.21, t * 0.17);
+  vec3 flow = curlNoise(p) * vec3(1.0, 0.35, 1.0) * (1.6 + u_audioRMS * 7.0) * mix(0.4, 1.0, u_coherence); // mostly in the disk's plane, so the arms stay readable
   vec3 displaced = base + flow * u_dispersion;
 
   vec3 worldPos = displaced;
@@ -98,7 +134,7 @@ void main() {
   vec3 upRef = abs(toCam.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
   vec3 right = normalize(cross(upRef, toCam));
   vec3 up = cross(toCam, right);
-  float s = (0.35 + u_particleScale * 0.55) * (0.85 + 0.3 * particleSeed);
+  float s = (0.35 + u_particleScale * 0.55) * (0.85 + 0.3 * s3) * mix(1.0, 1.4, core);
   vec3 corner = right * position.x * s + up * position.y * s;
   vec4 mvPosition = modelViewMatrix * vec4(displaced + corner, 1.0);
   vUv = uv;
@@ -108,15 +144,15 @@ void main() {
   // fade by distance relative to the camera's orbit, so the falloff holds at any orbit radius
   float camDist = length(uCameraPos);
   float depth = smoothstep(camDist + 110.0, camDist - 60.0, -mvPosition.z);
-  vAlpha = 0.13 * mix(0.12, 0.95, depth) * (0.55 + 0.45 * u_coherence); // additive: keep the sum of 100k below white
+  float energy = 0.75 + 1.5 * u_audioRMS;
+  vAlpha = 0.11 * energy * mix(0.25, 1.0, depth) * ends * mix(clamp(r / 34.0, 0.3, 1.0), 0.7, core) * mix(1.0, 0.55, dust); // additive: keep the sum below white; the inner disk is denser, so dimmer per particle
   vGlow = 0.25 + u_audioRMS * 0.75 + (1.0 - u_coherence) * 0.15;
 
-  float hue = fract(particleSeed * 0.173 + uTime * 0.02 + u_colorShift * 0.12);
-  vec3 c1 = vec3(0.55, 0.62, 0.78);
-  vec3 c2 = vec3(0.45, 0.72, 0.76);
-  vec3 c3 = vec3(0.58, 0.52, 0.74);
-  vec3 mixCol = mix(mix(c1, c2, hue), c3, smoothstep(0.35, 0.85, hue));
-  vColor = mix(vec3(0.35), mixCol, 0.55 + 0.35 * depth);
+  // colour follows the radius (gold core, magenta and cyan arms, navy rim), drifts slowly with time and the
+  // spectral balance of the sound (u_colorShift), never a rainbow flash
+  float rn = clamp((r - 4.0) / 60.0, 0.0, 1.0);
+  float x = 0.72 - rn * 0.62 + u_colorShift * 0.05 + (s3 - 0.5) * 0.06;
+  vColor = palette(x) * (1.2 - 0.3 * rn);
 }
 `;
 
@@ -133,7 +169,7 @@ void main() {
   float soft = smoothstep(1.0, 0.2, r);
   float core = smoothstep(0.82, 0.0, r);
   float a = soft * vAlpha;
-  vec3 col = vColor * (0.65 + 0.35 * core) + vec3(0.08, 0.1, 0.14) * vGlow * core;
+  vec3 col = vColor * (0.65 + 0.35 * core) + vec3(0.04, 0.05, 0.07) * vGlow * core;
   if (a < 0.015) discard;
   gl_FragColor = vec4(col, a);
 }

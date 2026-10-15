@@ -13,7 +13,7 @@ const BUFFER_SIZE = 2048;
 
 export class AudioCapture {
   private ctx: AudioContext | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
+  private source: AudioNode | null = null;
   private gain: GainNode | null = null;
   private stream: MediaStream | null = null;
   private analyzer: ReturnType<typeof Meyda.createMeydaAnalyzer> | null = null;
@@ -40,11 +40,17 @@ export class AudioCapture {
     });
   }
 
-  startAnalyzing(onFeatures: (f: AudioFeatures) => void): void {
-    if (!this.stream) throw new Error('No mic stream');
+  /** Analyse the microphone (after requestMic) or, when given, a playing audio element that also stays audible. */
+  startAnalyzing(onFeatures: (f: AudioFeatures) => void, element?: HTMLMediaElement): void {
+    if (!element && !this.stream) throw new Error('No mic stream');
     this.ctx = new AudioContext();
     this.sampleRate = this.ctx.sampleRate;
-    this.source = this.ctx.createMediaStreamSource(this.stream);
+    if (element) {
+      this.source = this.ctx.createMediaElementSource(element);
+      this.source.connect(this.ctx.destination);
+    } else {
+      this.source = this.ctx.createMediaStreamSource(this.stream!);
+    }
     this.gain = this.ctx.createGain();
     this.gain.gain.value = 1;
     this.source.connect(this.gain);

@@ -6,10 +6,12 @@ const HOST = location.hostname || 'localhost';
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${HOST}:${BACKEND_PORT}/live`;
 const TELEMETRY_URL = `${location.protocol === 'https:' ? 'https' : 'http'}://${HOST}:${BACKEND_PORT}/api/telemetry`;
 
-// The hosted demo (GitHub Pages, built with VITE_LIVE=0) has no backend, so it skips the :8787 probes and runs on
-// the built-in generator. Add ?live to the URL to probe anyway.
+// Only the dev server (npm run dev) probes the :8787 backend by default. A built site (npm run build, GitHub Pages)
+// runs on the built-in generator and logs no connection errors; build with VITE_LIVE=1 or add ?live to the URL to
+// probe anyway. VITE_LIVE=0 turns the probes off in dev too.
 const LIVE_ENABLED =
-  import.meta.env.VITE_LIVE !== '0' || new URLSearchParams(location.search).has('live');
+  (import.meta.env.DEV ? import.meta.env.VITE_LIVE !== '0' : import.meta.env.VITE_LIVE === '1') ||
+  new URLSearchParams(location.search).has('live');
 
 const POLL_MS = 100; // 10Hz HTTP fallback
 const WS_RETRY_MS = 5000;
@@ -115,8 +117,9 @@ export class SocketClient {
     const t0 = performance.now();
     this.mockTimer = setInterval(() => {
       const t = (performance.now() - t0) / 1000;
-      const aiFreq = 180 + 90 * Math.sin(t * 0.7) + 40 * Math.sin(t * 2.1);
-      const aiAmplitude = 0.12 + 0.08 * Math.sin(t * 1.3) ** 2;
+      // big enough to see without a microphone: slow swells plus a pulse about every 1.6 s
+      const aiFreq = 220 + 160 * Math.sin(t * 0.5) + 60 * Math.sin(t * 1.7);
+      const aiAmplitude = 0.18 + 0.2 * Math.sin(t * 0.9) ** 2 + 0.22 * Math.max(0, Math.sin(t * 3.9)) ** 6;
       this.latest = { t, aiFreq, aiAmplitude };
       this.onSample?.(this.latest);
     }, 50);

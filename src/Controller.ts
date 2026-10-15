@@ -17,6 +17,7 @@ export class Controller {
     rms: 0,
     coherence: 1,
     colorShift: 0,
+    tone: 0,
     density: 1,
   };
 
@@ -48,12 +49,15 @@ export class Controller {
     this.smoothed.rms += (targetRms - this.smoothed.rms) * a;
     this.smoothed.coherence += (coh - this.smoothed.coherence) * a;
     this.smoothed.colorShift += colorShiftSpeed * deltaSec * 0.08;
+    // brighter timbre (higher spectral centroid) leans the palette towards magenta and gold, slowly
+    const tone = Math.min(1, Math.max(0, (this.lastFeatures.spectralCentroid || 0) / 200));
+    this.smoothed.tone += (tone - this.smoothed.tone) * (1 - Math.exp(-deltaSec / 1.5));
     const beatPulse = this.lastFeatures.beat > 0.5 ? 0.08 : 0;
     this.smoothed.density = 1 + this.smoothed.rms * 0.35 + beatPulse + this.aiSample.aiAmplitude * 0.2;
 
     return {
       u_density: this.smoothed.density,
-      u_colorShift: this.smoothed.colorShift % 1000,
+      u_colorShift: (this.smoothed.colorShift % 1000) + this.smoothed.tone * 2,
       u_coherence: this.smoothed.coherence,
       u_time: performance.now() / 1000,
       u_audioRMS: this.smoothed.rms,

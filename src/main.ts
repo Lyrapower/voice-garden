@@ -5,6 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
 import GUI from 'lil-gui';
 import { AudioCapture } from './AudioCapture';
 import { Controller } from './Controller';
@@ -22,13 +23,26 @@ import { useGardenStore } from './store';
 const BG = 0x0a0a0f;
 // The camera orbits outside the cloud (radius up to ~60 x dispersion) so the field reads as one glowing body with dark
 // space around it; from inside it, 100k additive quads sum to a white screen.
-const CAMERA_ORBIT = 150;
+const CAMERA_ORBIT = 120;
 const FIELD_RADIUS = 55; // what must stay in frame horizontally on a portrait screen
-/** Orbit radius for the current aspect: 150 on landscape, further back on a phone held upright. */
+/** Camera distance for the current aspect: 120 on landscape, further back on a phone held upright. */
 function orbitFor(aspect: number): number {
   const halfV = THREE.MathUtils.degToRad(52 / 2);
   return Math.max(CAMERA_ORBIT, FIELD_RADIUS / (Math.tan(halfV) * aspect));
 }
+
+/** Where the camera wants to be at time `now` (ms): circling slowly, looking down on the turning disk. */
+function orbitTarget(now: number, aspect: number, mx: number, my: number, out: THREE.Vector3): THREE.Vector3 {
+  const orbit = now * 0.00011;
+  const r = orbitFor(aspect) + Math.sin(now * 0.00035) * 1.8;
+  // about 40 degrees above the disk, bobbing a little
+  const lift = 0.62 + Math.sin(orbit * 0.7) * 0.06;
+  out.set(Math.cos(orbit), lift, Math.sin(orbit)).normalize().multiplyScalar(r);
+  return out.add(tmpOffset.set(mx * 18, my * 12, 0));
+}
+const tmpOffset = new THREE.Vector3();
+// aim a little below the centre: the near rim of the tilted disk reaches lower on screen than the far rim
+const LOOK_AT = new THREE.Vector3(0, -8, 0);
 
 const chromaShader = {
   uniforms: {
@@ -89,7 +103,8 @@ async function main(): Promise<void> {
   scene.background = new THREE.Color(BG);
 
   const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.5, 400);
-  camera.position.set(0, 0, orbitFor(camera.aspect));
+  orbitTarget(performance.now(), camera.aspect, 0, 0, camera.position); // start on the orbit, not level with the disk
+  camera.lookAt(LOOK_AT);
 
   const count = useGardenStore.getState().settings.particleCount;
   const field = createParticleInstancedField(count);
@@ -99,12 +114,15 @@ async function main(): Promise<void> {
   composer.setSize(window.innerWidth, window.innerHeight);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
+  // short light trails: each frame keeps a fading copy of the last ones, so the flow reads as streaks
+  const trails = new AfterimagePass(0.8);
+  composer.addPass(trails);
 
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
     1.0,
-    0.42,
-    0.25, // threshold: only the dense core blooms, not every particle
+    0.32,
+    0.35, // threshold: only the bright arms and core bloom, not every particle
   );
   composer.addPass(bloomPass);
 
@@ -228,8 +246,36 @@ async function main(): Promise<void> {
   const btnStop = document.querySelector<HTMLButtonElement>('#btn-stop');
   const recInd = document.querySelector<HTMLElement>('#rec-indicator');
 
+  // ▶ Play demo track: a CC0 synth loop shipped with the page, analysed exactly like the microphone
+  const btnDemo = document.querySelector<HTMLButtonElement>('#btn-demo');
+  let demo: HTMLAudioElement | null = null;
+  const stopDemo = () => {
+    if (!demo) return;
+    demo.pause();
+    audio.stop();
+    demo = null;
+    btnDemo!.textContent = '▶ Play demo track';
+  };
+  btnDemo?.addEventListener('click', async () => {
+    if (demo) return stopDemo();
+    if (useGardenStore.getState().micEnabled) btnMic?.click(); // one source at a time
+    const el = new Audio(`${import.meta.env.BASE_URL}demo-track.mp3`); // MP3 plays in every browser, AAC does not
+    el.loop = true;
+    try {
+      await el.play();
+    } catch (e) {
+      // NotAllowedError: the browser wants a fresh tap. Anything else: the file could not be loaded or decoded.
+      btnDemo.textContent = (e as DOMException)?.name === 'NotAllowedError' ? '▶ Tap again to play' : 'Demo track unavailable';
+      return;
+    }
+    demo = el;
+    audio.startAnalyzing((f) => controller.setAudioFeatures(f), el);
+    btnDemo.textContent = '❚❚ Pause demo track';
+  });
+
   btnMic?.addEventListener('click', async () => {
     const st = useGardenStore.getState();
+    if (!st.micEnabled) stopDemo();
     if (st.micEnabled) {
       audio.stop();
       useGardenStore.getState().setMicEnabled(false);
@@ -250,6 +296,7 @@ async function main(): Promise<void> {
     }
   });
 
+  folder.add({ 'Record session': () => btnRecord?.click() }, 'Record session');
   btnRecord?.addEventListener('click', () => {
     recordT0 = performance.now();
     memoryHall.startRecording();
@@ -262,7 +309,6 @@ async function main(): Promise<void> {
     const vf = controller.getVoiceFreq();
     const ai = socket.getLatest().aiFreq;
     await memoryHall.stopRecording(sampleKeyframe, vf, ai);
-    btnRecord!.hidden = false;
     btnStop!.hidden = true;
     recInd!.hidden = true;
   });
@@ -306,16 +352,9 @@ async function main(): Promise<void> {
         camera.lookAt(k.camera.tx, k.camera.ty, k.camera.tz);
       }
     } else {
-      const breath = Math.sin(now * 0.00035) * 1.8;
-      const orbit = now * 0.000055;
-      const r = orbitFor(camera.aspect) + breath;
-      tmpCam.set(
-        Math.cos(orbit) * r + mouse.x * 18,
-        Math.sin(orbit * 0.7) * 4 + mouse.y * 12,
-        Math.sin(orbit) * r * 0.85 + 8,
-      );
+      orbitTarget(now, camera.aspect, mouse.x, mouse.y, tmpCam);
       camera.position.lerp(tmpCam, 1 - Math.exp(-dt * 1.8));
-      camera.lookAt(0, 0, 0);
+      camera.lookAt(LOOK_AT);
     }
 
     camera.getWorldPosition(camWorld);

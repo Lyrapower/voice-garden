@@ -202,3 +202,22 @@ body {
     bottom: calc(60px + env(safe-area-inset-bottom));
   }
 }
+
+/* one primary action, one secondary */
+.bottom-bar .btn-primary {
+  background: linear-gradient(135deg, rgba(122, 143, 216, 0.95), rgba(176, 96, 196, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  box-shadow: 0 8px 28px -8px rgba(176, 96, 196, 0.6);
+}
+.bottom-bar .btn-primary:hover { background: linear-gradient(135deg, rgba(140, 160, 230, 1), rgba(196, 110, 214, 1)); }
+.bottom-bar .btn-mic { border-radius: 999px; }
+
+/* settings stay out of the way: a small closed panel in the top-right corner; recorded sessions on the left */
+.gui-mount { top: 52px; right: 12px; width: 220px; }
+@media (min-width: 641px) {
+  .memory-hall { right: auto; left: 12px; }
+}
