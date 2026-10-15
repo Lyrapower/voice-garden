@@ -221,3 +221,73 @@ body {
 @media (min-width: 641px) {
   .memory-hall { right: auto; left: 12px; }
 }
+
+/* ---- glass: the bars float over the sky as frosted panels ---------------------------------------- */
+:root {
+  --glass-bg: rgba(18, 20, 36, 0.34);
+  --glass-border: rgba(255, 255, 255, 0.11);
+  --glass-shadow: 0 10px 36px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --edge: 10px;
+}
+
+.top-bar,
+.bottom-bar {
+  left: var(--edge);
+  right: var(--edge);
+  border-radius: 18px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+}
+
+.top-bar {
+  top: calc(env(safe-area-inset-top) + var(--edge));
+  padding: 9px 10px 9px 16px;
+}
+
+.bottom-bar {
+  bottom: calc(env(safe-area-inset-bottom) + var(--edge));
+  padding: 9px 10px;
+  width: fit-content;
+  right: auto;
+}
+
+.bottom-bar button {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.gui-mount {
+  top: calc(env(safe-area-inset-top) + 66px);
+  right: var(--edge);
+}
+
+.gui-mount .lil-gui {
+  --background-color: rgba(18, 20, 36, 0.42);
+  --title-background-color: rgba(18, 20, 36, 0.42);
+  --widget-color: rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+}
+
+.latency-overlay {
+  bottom: calc(env(safe-area-inset-bottom) + 70px);
+  left: calc(var(--edge) + 6px);
+}
+
+.memory-card {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+
+.gui-mount .lil-gui.root {
+  width: 100%;
+}

@@ -18,6 +18,7 @@ import {
   uniform,
 } from './ParticleField';
 import { SocketClient } from './SocketClient';
+import { Backdrop } from './Backdrop';
 import { useGardenStore } from './store';
 
 const BG = 0x0a0a0f;
@@ -109,6 +110,9 @@ async function main(): Promise<void> {
   const count = useGardenStore.getState().settings.particleCount;
   const field = createParticleInstancedField(count);
   scene.add(field.mesh);
+  const backdrop = new Backdrop();
+  backdrop.bake(renderer, window.innerWidth, window.innerHeight);
+  scene.add(backdrop.mesh);
 
   const composer = new EffectComposer(renderer);
   composer.setSize(window.innerWidth, window.innerHeight);
@@ -350,6 +354,7 @@ async function main(): Promise<void> {
       }
     } else {
       orbitTarget(now, camera.aspect, mouse.x, mouse.y, tmpCam);
+      backdrop.setOrbit(now * 0.00011);
       camera.position.lerp(tmpCam, 1 - Math.exp(-dt * 1.8));
       camera.lookAt(LOOK_AT);
     }
@@ -384,6 +389,7 @@ async function main(): Promise<void> {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
+    backdrop.bake(renderer, w, h);
     composer.setSize(w, h);
     bloomPass.setSize(w, h);
   });
