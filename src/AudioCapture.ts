@@ -14,6 +14,7 @@ const BUFFER_SIZE = 2048;
 export class AudioCapture {
   private ctx: AudioContext | null = null;
   private source: AudioNode | null = null;
+  private track: AudioBufferSourceNode | null = null;
   private gain: GainNode | null = null;
   private stream: MediaStream | null = null;
   private analyzer: ReturnType<typeof Meyda.createMeydaAnalyzer> | null = null;
@@ -40,18 +41,48 @@ export class AudioCapture {
     });
   }
 
-  /** Analyse the microphone (after requestMic) or, when given, a playing audio element that also stays audible. */
-  startAnalyzing(onFeatures: (f: AudioFeatures) => void, element?: HTMLMediaElement): void {
-    if (!element && !this.stream) throw new Error('No mic stream');
+  /** Analyse the microphone (after requestMic). */
+  startAnalyzing(onFeatures: (f: AudioFeatures) => void): void {
+    if (!this.stream) throw new Error('No mic stream');
     this.ctx = new AudioContext();
     this.sampleRate = this.ctx.sampleRate;
-    if (element) {
-      this.source = this.ctx.createMediaElementSource(element);
-      this.source.connect(this.ctx.destination);
-    } else {
-      this.source = this.ctx.createMediaStreamSource(this.stream!);
+    this.attach(this.ctx.createMediaStreamSource(this.stream), onFeatures);
+  }
+
+  /**
+   * Play an audio file as a seamless loop and analyse it. Call from a tap: the AudioContext is created before the
+   * first await, so iOS Safari lets it play. Web Audio loops sample-exactly (an <audio loop> leaves a gap), and
+   * loopBounds skips any encoder padding a decoder leaves at either end.
+   */
+  async startTrack(url: string, onFeatures: (f: AudioFeatures) => void): Promise<void> {
+    const ctx = new AudioContext();
+    this.ctx = ctx;
+    this.sampleRate = ctx.sampleRate;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`demo track: HTTP ${res.status}`);
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+      if (this.ctx !== ctx) return; // stopped while loading
+      const { start, end } = loopBounds(buf.getChannelData(0), buf.sampleRate);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.loopStart = start;
+      src.loopEnd = end;
+      src.connect(ctx.destination);
+      this.attach(src, onFeatures);
+      src.start(0, start);
+      this.track = src;
+    } catch (e) {
+      if (this.ctx === ctx) this.stop();
+      throw e;
     }
-    this.gain = this.ctx.createGain();
+  }
+
+  private attach(source: AudioNode, onFeatures: (f: AudioFeatures) => void): void {
+    const ctx = this.ctx!;
+    this.source = source;
+    this.gain = ctx.createGain();
     this.gain.gain.value = 1;
     this.source.connect(this.gain);
 
@@ -59,7 +90,7 @@ export class AudioCapture {
     if (isWorkletSupported()) {
       this.workletRecorder = new WorkletRecorder();
       void this.workletRecorder
-        .attach(this.ctx, this.gain)
+        .attach(ctx, this.gain)
         .then(() => {
           this.workletReady = true;
         })
@@ -69,7 +100,7 @@ export class AudioCapture {
     }
 
     this.analyzer = Meyda.createMeydaAnalyzer({
-      audioContext: this.ctx,
+      audioContext: ctx,
       source: this.gain,
       bufferSize: BUFFER_SIZE,
       featureExtractors: ['rms', 'spectralCentroid', 'amplitudeSpectrum'],
@@ -203,6 +234,12 @@ export class AudioCapture {
     }
     this.wavProcessor = null;
     this.mute = null;
+    try {
+      this.track?.stop();
+    } catch {
+      /* ignore */
+    }
+    this.track = null;
     this.source?.disconnect();
     this.source = null;
     this.gain?.disconnect();
@@ -212,4 +249,18 @@ export class AudioCapture {
     void this.ctx?.close();
     this.ctx = null;
   }
+}
+
+/**
+ * Loop points in seconds that skip exact digital silence at either end: the encoder padding some decoders keep.
+ * The track itself never starts or ends in silence (its reverb tail wraps to the start), so anything below the
+ * threshold at the edges is padding. Falls back to the whole buffer if it is silent throughout.
+ */
+export function loopBounds(data: Float32Array, sampleRate: number, threshold = 1e-5): { start: number; end: number } {
+  let a = 0;
+  while (a < data.length && Math.abs(data[a]!) < threshold) a++;
+  let b = data.length;
+  while (b > a && Math.abs(data[b - 1]!) < threshold) b--;
+  if (b <= a) return { start: 0, end: data.length / sampleRate };
+  return { start: a / sampleRate, end: b / sampleRate };
 }

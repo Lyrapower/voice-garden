@@ -248,29 +248,26 @@ async function main(): Promise<void> {
 
   // ▶ Play demo track: a CC0 synth loop shipped with the page, analysed exactly like the microphone
   const btnDemo = document.querySelector<HTMLButtonElement>('#btn-demo');
-  let demo: HTMLAudioElement | null = null;
+  let demoOn = false;
   const stopDemo = () => {
-    if (!demo) return;
-    demo.pause();
+    if (!demoOn) return;
+    demoOn = false;
     audio.stop();
-    demo = null;
     btnDemo!.textContent = '▶ Play demo track';
   };
   btnDemo?.addEventListener('click', async () => {
-    if (demo) return stopDemo();
+    if (demoOn) return stopDemo();
     if (useGardenStore.getState().micEnabled) btnMic?.click(); // one source at a time
-    const el = new Audio(`${import.meta.env.BASE_URL}demo-track.mp3`); // MP3 plays in every browser, AAC does not
-    el.loop = true;
-    try {
-      await el.play();
-    } catch (e) {
-      // NotAllowedError: the browser wants a fresh tap. Anything else: the file could not be loaded or decoded.
-      btnDemo.textContent = (e as DOMException)?.name === 'NotAllowedError' ? '▶ Tap again to play' : 'Demo track unavailable';
-      return;
-    }
-    demo = el;
-    audio.startAnalyzing((f) => controller.setAudioFeatures(f), el);
+    demoOn = true;
     btnDemo.textContent = '❚❚ Pause demo track';
+    try {
+      // a seamless Web Audio loop; MP3 because every browser decodes it, AAC not everywhere
+      await audio.startTrack(`${import.meta.env.BASE_URL}demo-track.mp3`, (f) => controller.setAudioFeatures(f));
+    } catch {
+      if (!demoOn) return; // paused while loading
+      demoOn = false;
+      btnDemo.textContent = 'Demo track unavailable';
+    }
   });
 
   btnMic?.addEventListener('click', async () => {

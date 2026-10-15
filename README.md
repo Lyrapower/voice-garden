@@ -18,7 +18,7 @@ Most audio visualizers are bars and waveforms. Voice Garden treats sound more li
 
 - **100k particles in one draw call.** One `InstancedMesh` draws camera-facing quads. The vertex shader lays them out as three logarithmic spiral arms that turn as one pattern while the particles stream inward along them, with curl-noise turbulence on top. Light trails, an Unreal bloom pass and a light chromatic aberration finish the image (WebGL2).
 - **Colour from the sound.** A deep-space palette (navy, cyan, magenta, gold) runs from the rim to the core and leans warmer as the sound gets brighter (spectral centroid); loudness and onsets push brightness and glow.
-- **Moves on its own, plays a demo track, listens to the microphone.** With no input a built-in generator keeps it moving. **▶ Play demo track** plays a 24-second synth loop ([CC0](#license)) through the same analysis. [Meyda](https://meyda.js.org/) extracts loudness (RMS), spectral centroid, dominant frequency and onsets ("beats") from Web Audio; these drive density, flow strength and colour.
+- **Moves on its own, plays a demo track, listens to the microphone.** With no input a built-in generator keeps it moving. **▶ Play demo track** plays a 28-second dream-trance loop made entirely from code ([CC0](#license)) through the same analysis, looped sample-exactly with Web Audio. [Meyda](https://meyda.js.org/) extracts loudness (RMS), spectral centroid, dominant frequency and onsets ("beats") from Web Audio; these drive density, flow strength and colour.
 - **Record and replay sessions.** A session is saved as mono WAV plus particle keyframes in IndexedDB, on your device only. Replaying drives the field from the recording. **Record session** is in the Garden panel (top right).
 - **Live controls.** A settings panel for dispersion, particle size, flow speed, audio reactivity, bloom, colour drift and particle count.
 - **Latency overlay.** Shows FPS and the audio-to-visual delay, so you can check the ≤ 80 ms target on your machine.
@@ -67,7 +67,7 @@ With no server, a built-in generator supplies similar samples at 20 Hz, so the p
 ## Tests
 
 ```bash
-npm test             # vitest: keyframe interpolation, coherence and controller bounds, WAV encoding
+npm test             # vitest: keyframe interpolation, coherence and controller bounds, WAV encoding, loop points
 npm run build        # type-check (strict) and build into dist/
 ```
 
@@ -94,4 +94,4 @@ Issues and pull requests are welcome. Issues labelled [`good first issue`](https
 
 ## License
 
-[MIT](LICENSE). `public/demo-track.mp3` is generated from code by [`make-demo-audio.mjs`](https://github.com/Lyrapower/voice-garden-render/blob/main/examples/make-demo-audio.mjs) in voice-garden-render and is CC0.
+[MIT](LICENSE). `public/demo-track.mp3` is generated from code by [`scripts/make-demo-track.py`](scripts/make-demo-track.py) (numpy, scipy and ffmpeg, only needed to regenerate it) and is CC0.
