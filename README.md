@@ -2,7 +2,7 @@
 
 **[▶ Open the live demo](https://lyrapower.github.io/voice-garden/)** · it moves on its own; press **▶ Play demo track** to hear it, or **Mic on** and talk, sing or play music. If it makes you smile, a ⭐ helps other people find it.
 
-![Voice Garden: 100,000 particles turning as a gold, magenta and cyan spiral, with light trails](docs/demo.gif)
+![Voice Garden: 100,000 particles turning as a gold, magenta and cyan spiral over a night sky and a planet's edge](docs/demo.gif)
 
 ```bash
 git clone https://github.com/Lyrapower/voice-garden && cd voice-garden
@@ -16,7 +16,7 @@ Most audio visualizers are bars and waveforms. Voice Garden treats sound more li
 
 ## Features
 
-- **100k particles in one draw call.** One `InstancedMesh` draws camera-facing quads. The vertex shader lays them out as three logarithmic spiral arms that turn as one pattern while the particles stream inward along them, with curl-noise turbulence on top. Light trails, an Unreal bloom pass and a light chromatic aberration finish the image (WebGL2).
+- **100k particles in one draw call.** One `InstancedMesh` draws camera-facing quads. The vertex shader lays them out as three logarithmic spiral arms that turn as one pattern while the particles stream inward along them, with curl-noise turbulence on top. Light trails, an Unreal bloom pass and a light chromatic aberration finish the image (WebGL2). Behind it, a night sky (stars, faint nebula, the limb of a planet) is computed once into a texture, no image files; the controls float over it as frosted glass.
 - **Colour from the sound.** A deep-space palette (navy, cyan, magenta, gold) runs from the rim to the core and leans warmer as the sound gets brighter (spectral centroid); loudness and onsets push brightness and glow.
 - **Moves on its own, plays a demo track, listens to the microphone.** With no input a built-in generator keeps it moving. **▶ Play demo track** plays a 28-second dream-trance loop made entirely from code ([CC0](#license)) through the same analysis, looped sample-exactly with Web Audio. [Meyda](https://meyda.js.org/) extracts loudness (RMS), spectral centroid, dominant frequency and onsets ("beats") from Web Audio; these drive density, flow strength and colour.
 - **Record and replay sessions.** A session is saved as mono WAV plus particle keyframes in IndexedDB, on your device only. Replaying drives the field from the recording. **Record session** is in the Garden panel (top right).

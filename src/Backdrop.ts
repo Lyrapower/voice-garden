@@ -166,8 +166,9 @@ export class Backdrop {
     this.show.uniforms.uTex!.value = this.target.texture;
   }
 
-  /** Pan with the camera's orbit angle (radians): one full orbit sweeps the sky across and back. */
+  /** Pan slowly with the camera's orbit angle (radians): four orbits sweep the sky across and back. Slow enough that
+   * the trail pass does not smear the stars into dashes. */
   setOrbit(angle: number): void {
-    this.show.uniforms.uPan!.value = 0.5 + 0.5 * Math.sin(angle);
+    this.show.uniforms.uPan!.value = 0.5 + 0.5 * Math.sin(angle * 0.25);
   }
 }
